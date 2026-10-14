@@ -1,0 +1,19 @@
+{
+  "record": "tellop-app-words",
+  "version": 1,
+  "keys": [],
+  "records": [
+    {
+      "name": "playroom",
+      "label": { "tr": "Oyun odası", "en": "Playroom" },
+      "fields": [
+        { "name": "owner_id", "label": { "tr": "Sahip", "en": "Owner" } },
+        { "name": "sound_on", "label": { "tr": "Ses", "en": "Sound" } },
+        { "name": "voice_on", "label": { "tr": "Sesli söyleme", "en": "Saying it aloud" } },
+        { "name": "voice_language", "label": { "tr": "Konuşma dili", "en": "Spoken language" } },
+        { "name": "keys_smashed", "label": { "tr": "Basılan tuşlar", "en": "Keys smashed" } },
+        { "name": "best_run", "label": { "tr": "En uzun seri", "en": "Best run" } }
+      ]
+    }
+  ]
+}

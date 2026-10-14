@@ -1,0 +1,761 @@
+/*
+ * How this app looks.
+ *
+ * The values live next door in `tokens.css` and `fonts.css`, which **Tellop owns and
+ * replaces whole** when the look-and-feel step is approved. Everything here reads them
+ * by name, so a new look is two files changing rather than a search through rules - and
+ * nothing here ever writes a colour, a radius, a shadow or a font family of its own.
+ *
+ * Every name ending in `-foreground` is what is legible *on* the name beside it. Use the
+ * pair; one half of it over some other colour is a pair of colours nobody checked.
+ *
+ * The imports have to be the first statements in the file: CSS puts `@import` before
+ * every rule, and a browser ignores one that comes later. `tokens.css` and `fonts.css`
+ * come first on purpose: they define the names everything below reads.
+ *
+ * ## The component kit reads the same names
+ *
+ * The pieces under `components/` are written in Tailwind's utility names - `bg-primary`,
+ * `text-muted-foreground`, `rounded-lg`. The `@theme` block below is the one place those
+ * names are joined to this app's own: `--color-primary: var(--primary)` and nothing else,
+ * so a piece of the kit is coloured by `tokens.css` exactly like a rule written by hand.
+ * There is no colour, no radius, no shadow and no font family anywhere in this file.
+ *
+ * `kit.css` beside this one is the kit's own sheet, copied in whole from the people who
+ * wrote the pieces - the open/closed states, the fade edges, the shimmer. It travels with
+ * the app so nothing has to be fetched for it, and it names none of this app's colours;
+ * every file it came from is written down in `components/PROVENANCE.json`.
+ *
+ * Two of the thirty-four names are deliberately NOT in that block under their own spelling -
+ * `--shadow` and `--radius` - and the reason is mechanical rather than stylistic. Measured:
+ * adding `--shadow: var(--shadow)` there puts `:root,:host{--shadow:var(--shadow)}` into the
+ * built stylesheet, after `tokens.css`'s real value and therefore winning over it, and a
+ * declaration that refers to itself is one CSS throws away. The shadow would silently stop
+ * existing everywhere. So both are read straight where a rule wants them -
+ * `box-shadow: var(--shadow)`, `border-radius: var(--radius)` - the way `--reading` and
+ * `--font-body` already are.
+ *
+ * That is about the two names themselves, and it is NOT the same as saying the kit's own
+ * `shadow-*` and `rounded-*` classes cannot reach this look. They can, and they do, because
+ * the names in the block are DIFFERENT names: `--shadow-sm` is not `--shadow`, so there is
+ * no self-reference and nothing is thrown away. The four small steps are pointed at this
+ * look's shadow, which is what makes a kit card carry the shadow the look chose without one
+ * line of the piece being edited. Measured in the built stylesheet: `.shadow-md` and every
+ * `shadow-sm` rule come out as `--tw-shadow: var(--shadow)`, where before the same build
+ * gave them a fixed grey of their own. `2xs` and `xs` are pointed the same way although no
+ * piece here uses one yet, so the day one does it inherits the look rather than a stranger's
+ * grey. `shadow-lg`, `shadow-xl` and up are deliberately left as they came:
+ * those are what a dialog or a menu floats on, and how far a thing floats above the page is
+ * about depth rather than about a look's own resting shadow. `shadow-(--shadow)` still works
+ * and still means the same thing; it is now the long way round for the small steps.
+ *
+ * The kit's corner sizes are derived from `--radius` under the `--radius-*` names, which
+ * collide with nothing - `xs` through `4xl`, multiples of the one chosen radius, so every
+ * `rounded-*` class in the kit is this look's corner too.
+ */
+
+@import "./tokens.css";
+@import "./fonts.css";
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./kit.css";
+@import "./print.css";
+
+/*
+ * The dark half is used only when DESIGN.md records an explicit request.
+ * Its switch is pressed by the visitor, never selected by the operating system.
+ */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * The join. Every right-hand side is a name `tokens.css` or `fonts.css` defines, so this
+ * block invents nothing - it only says which utility name reaches which of this app's own.
+ *
+ * The corner sizes are multiples of the one chosen radius rather than a subtraction, so a
+ * look that asked for square corners stays square at every size instead of going negative.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-xs: calc(var(--radius) * 0.4);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-2xs: var(--shadow);
+  --shadow-xs: var(--shadow);
+  --shadow-sm: var(--shadow);
+  --shadow-md: var(--shadow);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+}
+
+/*
+ * The starting styles, and why they are inside a layer.
+ *
+ * Everything below is what this app looks like before anybody writes a line of their own:
+ * the page, the headings, the form, the five bands. It sits in `@layer base` so that a
+ * utility class always wins over it - which is the whole reason the component kit works.
+ *
+ * A rule written OUTSIDE a layer beats every layer, so an unlayered `button { ... }` here
+ * would quietly override the kit's own Button on every screen and nothing would report it:
+ * the colours would still be this app's, and the shape, the size and the hover would not be
+ * the kit's. That is the trap this block exists to close.
+ *
+ * So: starting styles go in here. Anything a screen wants differently is a utility class or
+ * a rule of its own, and it wins.
+ *
+ * The first rule is the one default the kit is written against. A border utility with no
+ * colour of its own draws in the current text colour, which is never what a card's divider
+ * means; this is what makes it draw in `--border` instead.
+ */
+@layer base {
+  * {
+    box-sizing: border-box;
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    font-size: var(--reading);
+    line-height: 1.55;
+  }
+
+  /*
+   * A heading's FACE is a starting style; its SPACING is the page's business.
+   *
+   * The face, the weight and the size stay here, so a bare `<h1>` on any screen
+   * is set in the look's display family rather than in the browser's own bold.
+   * Margins belong to each page: a bare `h1` margin inside a flex column that has
+   * already said what the gap is makes the head taller than drawn.
+   */
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    /* The weight that face was actually shipped at - never the browser's own bold,
+       which it would have to fake for a display face that ships one weight. */
+    font-weight: var(--display-weight);
+    font-size: 1.75rem;
+    letter-spacing: -0.01em;
+  }
+
+  h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: var(--display-weight);
+    font-size: 1.1rem;
+  }
+
+  /*
+   * `:not([data-slot])` on these three for the reason the `button` rule below
+   * spells out: a kit piece writes utilities only for what it means to set, so a
+   * base rule reaches straight through for everything else. Measured 2026-09-02
+   * on a page holding one of every kit piece, before the scoping: the kit's own
+   * Input carried this rule's `margin-top` (4px) and its focus rule's outline
+   * width and offset (2px each, drawn by nobody only because the piece says
+   * `outline-none`); the kit's Label was `flex: 1 1 256px` and painted in
+   * `--muted-foreground` where it means to inherit the page's ink.
+   */
+  label:not([data-slot]) {
+    display: block;
+    flex: 1 1 16rem;
+    font-size: 0.85rem;
+    color: var(--muted-foreground);
+  }
+
+  input:not([data-slot]) {
+    margin-top: 0.25rem;
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--input);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--foreground);
+    font: inherit;
+  }
+
+  input:not([data-slot]):focus-visible,
+  button:not([data-slot]):not([class*="rounded-"]):not([class*="bg-"]):not([class*="text-"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .secondary {
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+  }
+
+  .panel {
+    background: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  .side {
+    background: var(--sidebar);
+    color: var(--sidebar-foreground);
+    border-right: 1px solid var(--sidebar-border);
+  }
+
+  .side .current {
+    background: var(--sidebar-primary);
+    color: var(--sidebar-primary-foreground);
+  }
+
+  .side a:hover {
+    background: var(--sidebar-accent);
+    color: var(--sidebar-accent-foreground);
+  }
+
+  .side a:focus-visible {
+    outline: 2px solid var(--sidebar-ring);
+  }
+
+  .quiet {
+    background: var(--muted);
+  }
+
+  /*
+   * The five bands are MARKS, never words.
+   *
+   * They are held to the floor a shape has to clear against a surface, which is
+   * lower than the floor words have to clear - so painting a caption in one is
+   * asking a colour to do a job it was never checked for. Measured: a band that
+   * cleared its surface as a mark came back at 2.57 against a panel, well under
+   * what words need. Fill with them; label beside them in `--foreground`.
+   */
+  .figure .one { background: var(--chart-1); }
+  .figure .two { background: var(--chart-2); }
+  .figure .three { background: var(--chart-3); }
+  .figure .four { background: var(--chart-4); }
+  .figure .five { background: var(--chart-5); }
+
+  .figure li {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--foreground);
+  }
+
+  .figure span {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 3px;
+  }
+
+  /*
+   * A plain `<button>` that nobody styled. The kit's own Button is the one to reach for -
+   * this is what the browser's grey rectangle becomes until then.
+   *
+   * `:not([data-slot])` is what holds it to that, and it was measured rather than
+   * guessed. The sentence that used to stand here - "a utility class or the kit's
+   * Button beats it from outside this layer" - is true only of a utility somebody
+   * WROTE, and the kit's quieter buttons deliberately write none: `variant="ghost"`
+   * names no background and no colour at all, because it means "take the surface you
+   * are on". So this rule reached straight through and painted every ghost button as a
+   * filled primary one, and an `outline` button - which names a background but no
+   * colour - came out with white words on a white face. The same went for every
+   * `Toggle`. Measured 2026-09-02 on the first page to use them: computed background
+   * `var(--primary)`, computed colour `var(--primary-foreground)`, on buttons whose
+   * class list carried the ghost variant correctly.
+   *
+   * Every piece of the kit marks itself with `data-slot`, so naming that is most of
+   * the fix, and a hand-written button keeps exactly the look it had.
+   *
+   * `data-slot` is not all of it, though, because two buttons in the kit are drawn by
+   * somebody else's code and carry no mark of ours. Measured 2026-09-02 with the first
+   * scoping alone in place: the month arrows on every calendar and date field - drawn
+   * by react-day-picker, styled by our own `buttonVariants({ variant: "ghost" })` -
+   * came out 28x28 filled `var(--primary)` with white marks in them, and the date
+   * field's clear cross came out 32x17.6 filled the same, inside a 16px slot. So the
+   * rule also stands aside for a button that carries any styling of its own: a class
+   * naming a corner, a background or an ink. A button nobody styled has none of those
+   * and keeps every line below; the three narrowings cost it nothing.
+   */
+  button:not([data-slot]):not([class*="rounded-"]):not([class*="bg-"]):not([class*="text-"]) {
+    padding: 0.55rem 1rem;
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  button:not([data-slot]):not([class*="rounded-"]):not([class*="bg-"]):not([class*="text-"])[disabled] {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .problem {
+    flex: 1 0 100%;
+    margin: 0;
+    color: var(--destructive);
+    font-size: 0.9rem;
+  }
+
+  .problem strong {
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius);
+    background: var(--destructive);
+    color: var(--destructive-foreground);
+  }
+}
+
+/*
+ * Smash the keys: the toy's own rules.
+ *
+ * Written outside the layer above on purpose, and only on `.smash-*` classes, so
+ * they shape the toy's own elements and the few kit pieces that carry one of
+ * these classes, and nothing else. Every colour, corner, shadow and face is a
+ * name from `tokens.css` and `fonts.css`.
+ *
+ * The drifting backdrop is a gradient over the five marks, `--chart-1` to
+ * `--chart-5`, and carries no words. Every word sits on a card in a checked pair:
+ * the start card, the counter and the controls are `--card` with
+ * `--card-foreground`, the saved line is `--secondary` with its pair, and a
+ * problem line is `--accent` with its pair.
+ *
+ * Emoji are placed by classes the engine picks at random (a spot, a tilt, a
+ * size), so nothing is ever styled from code while the toy runs.
+ */
+
+.smash-page {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  touch-action: manipulation;
+  font-family: var(--font-body);
+  background: linear-gradient(
+    120deg,
+    var(--chart-1) 0%,
+    var(--chart-2) 18%,
+    var(--chart-3) 36%,
+    var(--chart-4) 54%,
+    var(--chart-5) 72%,
+    var(--chart-1) 90%,
+    var(--chart-2) 100%
+  );
+  background-size: 320% 320%;
+  background-position: 0% 50%;
+  animation: smash-drift 32s ease-in-out infinite;
+}
+
+@keyframes smash-drift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.smash-stage {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+/* ---- the start card ---- */
+
+.smash-card {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: 34rem;
+  padding-block: 1.75rem;
+  text-align: center;
+  border-radius: calc(var(--radius) * 1.4);
+  box-shadow: var(--shadow);
+}
+
+.smash-card-header {
+  justify-items: center;
+  gap: 0.75rem;
+  padding-inline: 1.5rem;
+}
+
+.smash-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2.1rem, 7vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--card-foreground);
+}
+
+.smash-lead {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--card-foreground);
+}
+
+.smash-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding-inline: 1.5rem;
+}
+
+.smash-start {
+  min-width: min(100%, 16rem);
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+.smash-saved {
+  margin: 0;
+  padding: 0.4rem 1rem;
+  border-radius: calc(var(--radius) * 1.2);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.smash-note {
+  margin: 0;
+  max-width: 36ch;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--card-foreground);
+}
+
+.smash-problem,
+.smash-play-problem {
+  margin: 0;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+/* ---- the play screen ---- */
+
+.smash-emoji-layer,
+.smash-center {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  pointer-events: none;
+}
+
+.smash-center {
+  z-index: 2;
+}
+
+/* Scattered emoji start below the top bar, so none lands under Stop, the counter or
+   the controls. The bar is three rows tall on a narrow window, two on a middle one
+   and one on a wide one. */
+.smash-emoji-layer {
+  top: 11.5rem;
+}
+
+@media (min-width: 40rem) {
+  .smash-emoji-layer {
+    top: 9rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .smash-emoji-layer {
+    top: 5.5rem;
+  }
+}
+
+.smash-stage[data-started] .smash-emoji-layer,
+.smash-stage[data-started] .smash-center {
+  display: block;
+}
+
+/*
+ * The top of the play screen: Stop, the counter and the controls. A grid keeps
+ * them apart at every width: on a wide window they share one row; on a narrow one
+ * the counter moves to a row of its own under Stop and the controls, and the
+ * controls wrap inside their own space, so nothing covers the counter.
+ */
+.smash-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: none;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "start end"
+    "count count";
+  align-items: start;
+  gap: 0.75rem;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.smash-stage[data-started] .smash-topbar {
+  display: grid;
+}
+
+@media (min-width: 64rem) {
+  .smash-topbar {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas: "start count end";
+  }
+}
+
+.smash-corner {
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.smash-corner-start {
+  grid-area: start;
+  justify-self: start;
+}
+
+.smash-corner-end {
+  grid-area: end;
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.smash-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 0.375rem;
+  border-radius: calc(var(--radius) * 1.2);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow);
+}
+
+.smash-control {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.smash-language {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline-start: 0.5rem;
+}
+
+.smash-language-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+}
+
+.smash-language select {
+  height: 2.75rem;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.smash-play-problem {
+  max-width: 22rem;
+  text-align: end;
+  box-shadow: var(--shadow);
+}
+
+.smash-count {
+  grid-area: count;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 7rem;
+  padding: 0.4rem 1.1rem 0.5rem;
+  border-radius: calc(var(--radius) * 1.2);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow);
+  font-family: var(--font-display);
+  line-height: 1.05;
+  pointer-events: none;
+  user-select: none;
+}
+
+.smash-count-number {
+  font-size: clamp(1.9rem, 5vw, 3rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.smash-count-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* ---- the emoji ---- */
+
+.smash-emoji {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+  font-size: clamp(4rem, 11vh, 6.5rem);
+  line-height: 1;
+  user-select: none;
+  will-change: transform, opacity;
+  transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(var(--scale, 1));
+  animation: smash-pop 5s ease-out both;
+}
+
+@keyframes smash-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(calc(var(--scale, 1) * 0.2)); }
+  6% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(calc(var(--scale, 1) * 1.18)); }
+  10% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(calc(var(--scale, 1) * 0.96)); }
+  14% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(var(--scale, 1)); }
+  82% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(var(--scale, 1)); }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(calc(var(--scale, 1) * 0.82)); }
+}
+
+.smash-emoji.is-center {
+  left: 50%;
+  top: 50%;
+  font-size: clamp(6.5rem, 19vh, 9rem);
+  animation:
+    smash-center-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    smash-center-out 0.6s ease-in 4.4s both;
+}
+
+@keyframes smash-center-pop {
+  0% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(calc(var(--scale, 1) * 0.3)); }
+  60% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(calc(var(--scale, 1) * 1.12)); }
+  100% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(var(--scale, 1)); }
+}
+
+@keyframes smash-center-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes smash-fade {
+  0% { opacity: 0; }
+  4% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Forty spots spread over the screen, each a little off its grid line. */
+.smash-spot-0 { left: 12.5%; top: 10.0%; }
+.smash-spot-1 { left: 23.1%; top: 12.9%; }
+.smash-spot-2 { left: 34.6%; top: 10.2%; }
+.smash-spot-3 { left: 46.6%; top: 12.5%; }
+.smash-spot-4 { left: 53.1%; top: 13.0%; }
+.smash-spot-5 { left: 64.7%; top: 10.0%; }
+.smash-spot-6 { left: 79.9%; top: 10.0%; }
+.smash-spot-7 { left: 87.4%; top: 10.0%; }
+.smash-spot-8 { left: 12.0%; top: 30.0%; }
+.smash-spot-9 { left: 25.1%; top: 30.9%; }
+.smash-spot-10 { left: 35.0%; top: 26.4%; }
+.smash-spot-11 { left: 45.2%; top: 29.0%; }
+.smash-spot-12 { left: 53.8%; top: 31.4%; }
+.smash-spot-13 { left: 63.9%; top: 30.8%; }
+.smash-spot-14 { left: 75.2%; top: 26.2%; }
+.smash-spot-15 { left: 88.0%; top: 30.4%; }
+.smash-spot-16 { left: 14.0%; top: 49.9%; }
+.smash-spot-17 { left: 24.7%; top: 49.5%; }
+.smash-spot-18 { left: 31.2%; top: 47.0%; }
+.smash-spot-19 { left: 42.7%; top: 49.0%; }
+.smash-spot-20 { left: 54.8%; top: 46.8%; }
+.smash-spot-21 { left: 67.8%; top: 46.9%; }
+.smash-spot-22 { left: 79.1%; top: 48.3%; }
+.smash-spot-23 { left: 86.4%; top: 47.8%; }
+.smash-spot-24 { left: 12.4%; top: 66.5%; }
+.smash-spot-25 { left: 21.8%; top: 69.0%; }
+.smash-spot-26 { left: 34.3%; top: 66.1%; }
+.smash-spot-27 { left: 45.7%; top: 67.5%; }
+.smash-spot-28 { left: 54.9%; top: 67.4%; }
+.smash-spot-29 { left: 64.8%; top: 64.5%; }
+.smash-spot-30 { left: 77.6%; top: 67.2%; }
+.smash-spot-31 { left: 87.7%; top: 65.8%; }
+.smash-spot-32 { left: 12.0%; top: 83.5%; }
+.smash-spot-33 { left: 24.3%; top: 84.2%; }
+.smash-spot-34 { left: 31.6%; top: 86.0%; }
+.smash-spot-35 { left: 45.1%; top: 86.0%; }
+.smash-spot-36 { left: 57.8%; top: 84.5%; }
+.smash-spot-37 { left: 66.2%; top: 85.4%; }
+.smash-spot-38 { left: 77.9%; top: 86.0%; }
+.smash-spot-39 { left: 86.6%; top: 84.2%; }
+
+.smash-tilt-0 { --rot: -12deg; }
+.smash-tilt-1 { --rot: -8deg; }
+.smash-tilt-2 { --rot: -4deg; }
+.smash-tilt-3 { --rot: 0deg; }
+.smash-tilt-4 { --rot: 4deg; }
+.smash-tilt-5 { --rot: 8deg; }
+.smash-tilt-6 { --rot: 12deg; }
+
+.smash-size-0 { --scale: 0.82; }
+.smash-size-1 { --scale: 0.91; }
+.smash-size-2 { --scale: 1; }
+.smash-size-3 { --scale: 1.09; }
+.smash-size-4 { --scale: 1.18; }
+
+/* Reduced motion: the backdrop stands still and the emoji only fade in and out. */
+@media (prefers-reduced-motion: reduce) {
+  .smash-page {
+    animation: none;
+    background-position: 0% 50%;
+  }
+
+  .smash-emoji,
+  .smash-emoji.is-center {
+    animation: smash-fade 5s ease-out both;
+  }
+}
