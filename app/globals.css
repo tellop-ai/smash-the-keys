@@ -338,7 +338,7 @@
 }
 
 /*
- * Smash the keys: the toy's own rules.
+ * Emoji world (`smash-the-keys`): the toy's own rules.
  *
  * Written outside the layer above on purpose, and only on `.smash-*` classes, so
  * they shape the toy's own elements and the few kit pieces that carry one of

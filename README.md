@@ -1,4 +1,4 @@
-# Smash the keys
+# Emoji world
 
 A keyboard toy for toddlers: every key pops a big friendly emoji, with optional made-up sounds and the word said aloud in six languages.
 
