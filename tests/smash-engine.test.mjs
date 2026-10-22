@@ -96,11 +96,17 @@ class FakeVoice {
   constructor() {
     this.spoken = [];
     this.cancels = 0;
+    this.speaking = false;
+    this.pending = false;
     this.listeners = new Set();
   }
 
-  speak(utterance) { this.spoken.push(utterance); }
-  cancel() { this.cancels += 1; }
+  /** A word is said until it ends or is cancelled. */
+  speak(utterance) { this.spoken.push(utterance); this.speaking = true; }
+  cancel() { this.cancels += 1; this.speaking = false; }
+  resume() {}
+  /** The word being said comes to its end. */
+  finish() { this.speaking = false; this.spoken.at(-1)?.onend?.(); }
   getVoices() { return [{ lang: 'en-US', name: 'Reader' }, { lang: 'tr-TR', name: 'Turkish reader' }, { lang: 'fr_CA', name: 'French reader' }]; }
   addEventListener(type, listener) { if (type === 'voiceschanged') this.listeners.add(listener); }
   removeEventListener(type, listener) { if (type === 'voiceschanged') this.listeners.delete(listener); }
@@ -119,7 +125,14 @@ class FakeAudio {
   resume() { this.state = 'running'; return Promise.resolve(); }
   close() { this.state = 'closed'; return Promise.resolve(); }
   #param() { return { setValueAtTime() {}, exponentialRampToValueAtTime() {} }; }
-  createOscillator() { this.tones += 1; return { frequency: this.#param(), connect() {}, start() {}, stop() {} }; }
+  createOscillator() {
+    this.tones += 1;
+    const tone = { frequency: this.#param(), connect() {}, disconnect() {}, start() {}, stop() {} };
+    (this.playing ??= []).push(tone);
+    return tone;
+  }
+  /** The oldest sound still playing comes to its end. */
+  endOne() { this.playing.shift()?.onended?.(); }
   createGain() { return { gain: this.#param(), connect() {} }; }
   createBiquadFilter() { return { frequency: this.#param(), connect() {} }; }
 }
@@ -127,6 +140,9 @@ class FakeAudio {
 class FakeUtterance {
   constructor(text) { this.text = text; }
 }
+
+/** How long a word waits, so that a burst of keys says only its last one. */
+const WORD_WAIT_MS = 90;
 
 let doc;
 let voice;
@@ -256,9 +272,13 @@ test('with Say it on, one big emoji sits in the middle and its name is said', ()
   settings = { soundOn: true, voiceOn: true, voiceTag: 'tr-TR' };
   const toy = engine();
   toy.start();
+  voice.finish(); // the silent warm-up word that Start says
   doc.press({ key: 'a' });
+  mock.timers.tick(WORD_WAIT_MS);
   doc.press({ key: 'c' });
+  mock.timers.tick(WORD_WAIT_MS);
   doc.press({ key: 'd' });
+  mock.timers.tick(WORD_WAIT_MS);
   assert.equal(parts.centerSlot.children.length, 1);
   assert.equal(parts.emojiLayer.children.length, 0);
   const node = parts.centerSlot.children[0];
@@ -270,11 +290,12 @@ test('with Say it on, one big emoji sits in the middle and its name is said', ()
   assert.equal(said.pitch, 1.3);
   assert.equal(said.rate, 0.9);
   assert.equal(said.voice.name, 'Turkish reader');
-  assert.ok(voice.cancels >= 3, 'each word interrupts the one before');
+  assert.equal(voice.cancels, 2, 'each word interrupts the one still being said');
   assert.equal(FakeAudio.made[0].tones, 0, 'no made-up sound while words are said');
 
   settings = { soundOn: false, voiceOn: true, voiceTag: 'fr-FR' };
   doc.press({ key: 'a' });
+  mock.timers.tick(WORD_WAIT_MS);
   assert.equal(voice.spoken.at(-1).text, 'pomme');
   assert.equal(voice.spoken.at(-1).voice.name, 'French reader', 'the same language from another region');
   toy.destroy();
@@ -289,6 +310,91 @@ test('with Sound on and Say it off, each key makes a sound; with both off, none'
   doc.press({ key: 'x' });
   doc.press({ key: 'y' });
   assert.equal(FakeAudio.made[0].tones, 2);
+  toy.destroy();
+});
+
+test('a burst of keys with Say it on says at most one word in each wait, ending on its last key, and every word after it is said', () => {
+  settings = { soundOn: false, voiceOn: true, voiceTag: 'en-US' };
+  const toy = engine();
+  toy.start();
+  voice.finish(); // the silent warm-up word that Start says
+  const before = voice.spoken.length;
+  // A child's burst: 200 keys, 15 ms apart, with no word ending on its own.
+  let saidEarly;
+  for (let i = 0; i < 200; i += 1) {
+    doc.press({ key: 'abcdefgh'[i % 8] });
+    mock.timers.tick(15);
+    if (i === 9) saidEarly = voice.spoken.length - before;
+  }
+  assert.ok(saidEarly >= 1, 'words are said while the burst goes on, not only once it ends');
+  mock.timers.tick(WORD_WAIT_MS);
+  const duringBurst = voice.spoken.length - before;
+  assert.ok(duringBurst >= 1 && duringBurst <= Math.ceil((200 * 15) / WORD_WAIT_MS) + 1,
+    `at most one word in each wait, not one on every key (${duringBurst} words)`);
+  assert.ok(voice.cancels < duringBurst, 'the voice is stopped only when a word is still being said');
+  assert.equal(voice.spoken.at(-1).text, 'hamster', "the burst's last key (h) is the word said");
+  assert.equal(parts.counter.textContent, '200', 'every key still counts and pops');
+  // After the burst, slow keys each say their word.
+  for (const key of ['a', 'b', 'c']) {
+    voice.finish();
+    const said = voice.spoken.length;
+    doc.press({ key });
+    mock.timers.tick(WORD_WAIT_MS);
+    assert.equal(voice.spoken.length, said + 1, `the word for ${key} is said`);
+  }
+  toy.destroy();
+});
+
+test('keys 90 ms apart each say their word; keys closer than that share one', () => {
+  settings = { soundOn: false, voiceOn: true, voiceTag: 'en-US' };
+  const saidFor = (gapMs) => {
+    const toy = engine();
+    toy.start();
+    voice.finish(); // the silent warm-up word that Start says
+    const before = voice.spoken.length;
+    for (let i = 0; i < 20; i += 1) {
+      doc.press({ key: 'abcdefgh'[i % 8] });
+      mock.timers.tick(gapMs);
+    }
+    mock.timers.tick(WORD_WAIT_MS);
+    toy.destroy();
+    return voice.spoken.length - before;
+  };
+  assert.equal(saidFor(WORD_WAIT_MS + 1), 20);
+  assert.equal(saidFor(WORD_WAIT_MS), 20);
+  assert.ok(saidFor(WORD_WAIT_MS - 1) < 20, 'a key inside the wait only changes the word to come');
+});
+
+test('a word still waiting when play stops is never said', () => {
+  settings = { soundOn: false, voiceOn: true, voiceTag: 'en-US' };
+  const toy = engine();
+  toy.start();
+  const before = voice.spoken.length;
+  doc.press({ key: 'a' });
+  doc.press({ key: 'Escape' });
+  mock.timers.tick(WORD_WAIT_MS);
+  assert.equal(voice.spoken.length, before);
+  toy.destroy();
+});
+
+test('at most 12 made-up sounds play at once, and a finished sound makes room for the next', () => {
+  settings = { soundOn: true, voiceOn: false, voiceTag: 'en-US' };
+  const toy = engine();
+  toy.start();
+  for (let i = 0; i < 20; i += 1) doc.press({ key: 'x' });
+  const sounds = FakeAudio.made[0];
+  assert.equal(sounds.tones, 12, 'a burst never piles up more than 12 sounds');
+  assert.equal(parts.counter.textContent, '20', 'every key still counts');
+  sounds.endOne();
+  sounds.endOne();
+  doc.press({ key: 'y' });
+  doc.press({ key: 'y' });
+  doc.press({ key: 'y' });
+  assert.equal(sounds.tones, 14, 'two sounds ended, so two more play');
+  toy.stop();
+  toy.start();
+  doc.press({ key: 'z' });
+  assert.equal(sounds.tones, 15, 'a new run starts with room for every sound');
   toy.destroy();
 });
 
