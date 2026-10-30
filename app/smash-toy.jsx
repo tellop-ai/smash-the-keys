@@ -12,10 +12,7 @@ import { formatDecimal } from '../lib/format.js';
 import { t } from '../lib/i18n/index.js';
 import { VOICE_LANGUAGES, VOICE_TAGS, voiceTagFor } from '../lib/smash/emoji.js';
 import { createSmashEngine } from '../lib/smash/engine.js';
-import { MAX_ADDED, MAX_RUN } from '../lib/smash/limits.js';
-
-/** Play is saved at most this often while keys arrive, and once more when play stops. */
-const SAVE_EVERY_MS = 4000;
+import { createPlaySaves, runProblemFor, settingsProblemFor } from '../lib/smash/saves.js';
 
 /**
  * Whether an answer from the toy's addresses is a saved view.
@@ -33,11 +30,14 @@ function isView(value) {
 }
 
 /**
- * Sends one save and answers the saved view, or `null` when it was refused or
- * could not be confirmed. Never retried here.
+ * Sends one save and answers `{ playroom }`, the saved view, or `{ problem }`:
+ * the refusal's message key, or `''` when there is none or the save could not
+ * be confirmed. `runProblemFor` and `settingsProblemFor` choose the words.
+ * Never retried here.
  *
  * @param {string} address
  * @param {unknown} body
+ * @returns {Promise<{ playroom: any } | { problem: string }>}
  */
 async function post(address, body) {
   try {
@@ -47,10 +47,10 @@ async function post(address, body) {
       body: JSON.stringify(body),
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !isView(payload?.playroom)) return null;
-    return payload.playroom;
+    if (response.ok && isView(payload?.playroom)) return { playroom: payload.playroom };
+    return { problem: typeof payload?.problem === 'string' ? payload.problem : '' };
   } catch {
-    return null;
+    return { problem: '' };
   }
 }
 
@@ -74,13 +74,21 @@ function blurControl() {
  * when play stops. A refused save shows a short line and is not tried again.
  * Saves go out one after another, so their answers arrive in order.
  *
+ * `canSave` comes from the page, which asks the host who is playing
+ * (`lib/smash/roles.js`). What is sent, and when, is `lib/smash/saves.js`:
+ * without `canSave` the toy plays exactly the same, the settings switch for
+ * this visit only, and nothing is sent: no key is counted and no setting is
+ * saved, and the start screen says so. A host that refuses a save with
+ * `error.cannotChange` stops the saves for the rest of the visit.
+ *
  * @param {{
  *   locale: 'en' | 'tr',
  *   saved: { soundOn: boolean, voiceOn: boolean, voiceLanguage: string, keysSmashed: number, bestRun: number },
  *   noticeKey: string,
+ *   canSave: boolean,
  * }} props
  */
-export function SmashToy({ locale, saved, noticeKey }) {
+export function SmashToy({ locale, saved, noticeKey, canSave }) {
   const [started, setStarted] = useState(false);
   const [soundOn, setSoundOn] = useState(saved.soundOn);
   const [voiceOn, setVoiceOn] = useState(saved.voiceOn);
@@ -88,6 +96,7 @@ export function SmashToy({ locale, saved, noticeKey }) {
   const [counts, setCounts] = useState({ keysSmashed: saved.keysSmashed, bestRun: saved.bestRun });
   const [settingsProblem, setSettingsProblem] = useState('');
   const [runProblem, setRunProblem] = useState('');
+  const [savesStopped, setSavesStopped] = useState(false);
 
   const voiceTag = voiceTagFor(voiceChoice, locale);
 
@@ -97,44 +106,45 @@ export function SmashToy({ locale, saved, noticeKey }) {
   const counterRef = useRef(null);
   const engineRef = useRef(null);
   const settingsRef = useRef({ soundOn, voiceOn, voiceTag });
-  const playRef = useRef({ run: 0, pending: 0, lastSentAt: 0 });
   const queueRef = useRef(Promise.resolve());
+  const savesRef = useRef(null);
+  if (savesRef.current === null) savesRef.current = createPlaySaves({ canSave });
+
+  /** The host refused this person a change: nothing more is sent this visit. */
+  const stopSaves = useCallback(() => {
+    savesRef.current.stop();
+    setSavesStopped(true);
+  }, []);
 
   useEffect(() => {
     settingsRef.current = { soundOn, voiceOn, voiceTag };
   }, [soundOn, voiceOn, voiceTag]);
 
-  /** Queues one save of the keys not yet sent. */
-  const sendRun = useCallback(() => {
-    const play = playRef.current;
-    if (play.pending < 1) return;
-    const added = Math.min(play.pending, MAX_ADDED);
-    const run = Math.min(Math.max(play.run, added), MAX_RUN);
-    play.pending -= added;
-    play.lastSentAt = Date.now();
+  /** Queues one save of play. */
+  const sendPlay = useCallback((save) => {
     queueRef.current = queueRef.current.then(async () => {
-      const answer = await post('/api/playroom/run', { added, run });
-      if (answer === null) {
-        setRunProblem('smash.problem.runNotSaved');
+      // A refusal answered while this save waited stops it too.
+      if (!savesRef.current.sending) return;
+      const answer = await post('/api/playroom/run', save);
+      if ('problem' in answer) {
+        if (answer.problem === 'error.cannotChange') stopSaves();
+        setRunProblem(runProblemFor(answer.problem));
         return;
       }
-      setCounts({ keysSmashed: answer.keysSmashed, bestRun: answer.bestRun });
+      setCounts({ keysSmashed: answer.playroom.keysSmashed, bestRun: answer.playroom.bestRun });
     });
-  }, []);
+  }, [stopSaves]);
 
   /** Back to the start screen, saving whatever play has not saved yet. */
   const finish = useCallback(() => {
     setStarted(false);
-    const play = playRef.current;
-    while (play.pending > 0) sendRun();
-  }, [sendRun]);
+    for (const save of savesRef.current.finish()) sendPlay(save);
+  }, [sendPlay]);
 
   const onKey = useCallback((runCount) => {
-    const play = playRef.current;
-    play.run = runCount;
-    play.pending += 1;
-    if (Date.now() - play.lastSentAt >= SAVE_EVERY_MS) sendRun();
-  }, [sendRun]);
+    const save = savesRef.current.key(runCount);
+    if (save !== null) sendPlay(save);
+  }, [sendPlay]);
 
   const handlersRef = useRef({ onKey, finish });
   useEffect(() => {
@@ -160,14 +170,22 @@ export function SmashToy({ locale, saved, noticeKey }) {
 
   /** @param {{ soundOn: boolean, voiceOn: boolean, voiceLanguage: string }} next */
   function saveSettings(next) {
+    if (!savesRef.current.setting()) return;
     setSettingsProblem('');
     queueRef.current = queueRef.current.then(async () => {
+      if (!savesRef.current.sending) return;
       const answer = await post('/api/playroom/settings', next);
-      if (answer === null || answer.soundOn !== next.soundOn || answer.voiceOn !== next.voiceOn || answer.voiceLanguage !== next.voiceLanguage) {
+      if ('problem' in answer) {
+        if (answer.problem === 'error.cannotChange') stopSaves();
+        setSettingsProblem(settingsProblemFor(answer.problem));
+        return;
+      }
+      const view = answer.playroom;
+      if (view.soundOn !== next.soundOn || view.voiceOn !== next.voiceOn || view.voiceLanguage !== next.voiceLanguage) {
         setSettingsProblem('smash.problem.settingsNotSaved');
         return;
       }
-      setCounts({ keysSmashed: answer.keysSmashed, bestRun: answer.bestRun });
+      setCounts({ keysSmashed: view.keysSmashed, bestRun: view.bestRun });
     });
   }
 
@@ -175,7 +193,7 @@ export function SmashToy({ locale, saved, noticeKey }) {
   function begin(event) {
     const engine = engineRef.current;
     if (engine === null) return;
-    playRef.current = { run: 0, pending: 0, lastSentAt: Date.now() };
+    savesRef.current.begin();
     setRunProblem('');
     engine.start();
     setStarted(true);
@@ -214,7 +232,9 @@ export function SmashToy({ locale, saved, noticeKey }) {
     keys: formatDecimal(String(counts.keysSmashed), locale),
     best: formatDecimal(String(counts.bestRun), locale),
   });
-  const startLines = [noticeKey, runProblem, settingsProblem].filter((key) => typeof key === 'string' && key.length > 0);
+  const savesHere = canSave === true && !savesStopped;
+  // Two refusals with the same words show them once.
+  const startLines = [...new Set([noticeKey, runProblem, settingsProblem])].filter((key) => typeof key === 'string' && key.length > 0);
 
   return (
     <div ref={stageRef} className="smash-stage" data-started={started ? 'yes' : undefined}>
@@ -290,6 +310,7 @@ export function SmashToy({ locale, saved, noticeKey }) {
             </Button>
             <p className="smash-saved">{savedLine}</p>
             <p className="smash-note">{t('smash.stopNote', locale)}</p>
+            {savesHere ? null : <p className="smash-note">{t('smash.notSavedHere', locale)}</p>}
             {startLines.map((key) => (
               <p key={key} className="smash-problem" role="status">{t(key, locale)}</p>
             ))}

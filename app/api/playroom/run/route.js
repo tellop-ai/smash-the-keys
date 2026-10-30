@@ -32,9 +32,18 @@ function json(body, status = 200) {
   });
 }
 
-/** @param {unknown} error */
+/** The status of a refusal, by its message key; any other is 400. */
+const STATUS = Object.freeze({ 'error.saveUnconfirmed': 503, 'error.cannotChange': 403 });
+
+/**
+ * A refusal as its message key. The host's refusal of this person
+ * (`error.cannotChange`: a Viewer, or a Member changing the toy's one record,
+ * which the Member did not add) keeps its own words, never "could not save".
+ *
+ * @param {unknown} error
+ */
 function refusal(error) {
-  if (error instanceof DataError) return json({ problem: error.messageKey }, error.messageKey === 'error.saveUnconfirmed' ? 503 : 400);
+  if (error instanceof DataError) return json({ problem: error.messageKey }, STATUS[error.messageKey] ?? 400);
   return json({ problem: 'error.saveFailed' }, 500);
 }
 

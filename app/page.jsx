@@ -1,6 +1,8 @@
+import { currentPerson } from '../lib/data/person.js';
 import { PLAYROOM_DEFAULTS, readPlayroomFor } from '../lib/data/playroom.js';
 import { getLocale } from '../lib/i18n/index.js';
 import { currentOwner } from '../lib/smash/owner.js';
+import { canChange } from '../lib/smash/roles.js';
 
 import { SmashToy } from './smash-toy.jsx';
 
@@ -10,14 +12,25 @@ import { SmashToy } from './smash-toy.jsx';
  * `data-tellop-app-marker` is what Tellop's health probe looks for: a page that
  * renders it has really mounted. It stays on the outermost element of the page.
  *
- * The page only reads: the owner's settings and counts, or the defaults when
- * nothing is saved yet. Nothing is saved while it opens. If the saved values
- * cannot be read, the toy still opens with the defaults and says so quietly.
+ * The page only reads: who is playing, then the owner's settings and counts, or
+ * the defaults when nothing is saved yet. Nothing is saved while it opens. If
+ * the saved values cannot be read, the toy still opens with the defaults and
+ * says so quietly.
+ *
+ * Only the owner and a Helper save (`lib/smash/roles.js`). Anyone else plays
+ * the same toy and nothing is sent to be saved. When the host cannot say who is
+ * playing, nothing is saved either: a save it might refuse is never sent.
  */
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
   const locale = getLocale();
+  let canSave = false;
+  try {
+    canSave = canChange((await currentPerson()).role);
+  } catch {
+    canSave = false;
+  }
   let saved;
   let noticeKey = '';
   try {
@@ -29,7 +42,7 @@ export default async function Page() {
 
   return (
     <main className="smash-page" data-tellop-app-marker="ok">
-      <SmashToy locale={locale} saved={saved} noticeKey={noticeKey} />
+      <SmashToy locale={locale} saved={saved} noticeKey={noticeKey} canSave={canSave} />
     </main>
   );
 }
